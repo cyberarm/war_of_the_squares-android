@@ -13,8 +13,7 @@ class Warrior < Square
 
   def draw
     fill_rect(@x-2, @y-2, 68, 68, Color::BLACK)
-    #
-    fill_rect(@x-64, @y-64, 192, 192, Color.new(0.1,0.1,0.1, 0.2))
+    fill_rect(@x-64, @y-64, 192, 192, Color.new(0.1,0.1,0.1, 0.1))
 
     draw_line(@x+32, @y+32, @target.x+32, @target.y+32, Color::YELLOW) if @target && @friendly
     draw_line(@x+32, @y+32, @target.x+32, @target.y+32, Color::BLACK) if @target && !@friendly
@@ -22,8 +21,9 @@ class Warrior < Square
   end
 
   def update
+    super
     targets = []
-    if @retarget_tick > 8
+    if @retarget_tick > 4
       @retarget_tick = 0
       targets = Square.all.find_all do |square|
         if square.friendly != self.friendly

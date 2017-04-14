@@ -19,6 +19,7 @@ class Base < Square
   end
 
   def update
+    super
     @tick+=1
     @move_tick+=1
 
@@ -40,12 +41,6 @@ class Base < Square
       spawn_square
       @tick = 0
     end
-
-    # if $window.button_down?(MsLeft) && @friendly
-    #   @target   = Place.new
-    #   @target.x = $window.mouse_x-32
-    #   @target.y = $window.mouse_y-32
-    # end
 
     @target = nil if @target && !@friendly && self.x.between?(@target.x-4, @target.x+4) && self.y.between?(@target.y-4, @target.y+4)
 

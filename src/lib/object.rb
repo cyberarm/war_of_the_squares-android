@@ -28,7 +28,7 @@ class Square
     fill_rect(@x, @y-36, (@max_health/100.0*64), 18, Color::BLACK)
     fill_rect(@x, @y-36, (@health/100.0*64), 18, Color::GREEN) if @friendly
     fill_rect(@x, @y-36, (@health/100.0*64), 18, Color::RED) unless @friendly
-    # $window.text("#{@health}/#{@max_health}", self.x, self.y)
+    $window.text("#{@health}/#{@max_health}", self.x, self.y-33, true)
   end
 
   def update
@@ -42,6 +42,7 @@ class Square
   def die?
     if @health <= 0
       @@objects.delete(self)
+      $window.deaths+=1
       true
     else
       false
