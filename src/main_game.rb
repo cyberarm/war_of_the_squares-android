@@ -33,6 +33,11 @@ class MainGame < ApplicationAdapter
     @width  = Gdx.graphics.width
     @height = Gdx.graphics.height
 
+    # Double start glitch compansation
+    Square.all.clear
+    Square.all_friendly.clear
+    Square.all_hostile.clear
+
     @camera = OrthographicCamera.new(@width, @height)
     @camera.set_to_ortho(true, Gdx.graphics.width, Gdx.graphics.height)
     @viewport = ScalingViewport.new(Scaling.fit, 1920, 1080, @camera)
@@ -41,6 +46,7 @@ class MainGame < ApplicationAdapter
 
     @draw_queue = []
     @batch = SpriteBatch.new
+    @end_batch = SpriteBatch.new
     @font  = BitmapFont.new(true)
     @font.set_color(0,0,0, 0.9)
     @shape_renderer = ShapeRenderer.new
@@ -49,7 +55,11 @@ class MainGame < ApplicationAdapter
     Base.new(@width-500, 250, false)
 
     @deaths = 0
+    @last_collision_check_time = 0.0
     @activity_active = true
+    @startgame_time = Time.now.to_f
+    @endgame_text = nil
+    @endgame_time_text = nil
   end
 
   def render
@@ -58,21 +68,32 @@ class MainGame < ApplicationAdapter
 
     @camera.update
     @batch.setProjectionMatrix(@camera.combined)
+    @end_batch.setProjectionMatrix(@camera.combined)
     @shape_renderer.setProjectionMatrix(@camera.combined)
 
     Gdx.gl.glEnable(GL20.GL_BLEND)
     Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA,GL20.GL_ONE_MINUS_SRC_ALPHA)
-    @shape_renderer.begin(ShapeRenderer::ShapeType::Filled)
     draw
-    @shape_renderer.end
     Gdx.gl.glDisable(GL20.GL_BLEND)
 
     @batch.begin
-    text("FPS: #{Gdx.graphics.frames_per_second}", 10, 10)
-    text("Objects: #{Square.all.count}", 10, 25)
-    text("Deaths: #{@deaths}", 10, 40)
-    draw_queue
+      text("FPS: #{Gdx.graphics.frames_per_second}", 10, 10)
+      text("Objects: #{Square.all.count}", 10, 25)
+      text("Deaths: #{@deaths}", 10, 40)
+      text("Last Collision Time: #{@last_collision_check_time}", 10, 55)
     @batch.end
+    draw_queue
+
+    if @endgame_text
+      @font.data.set_scale(4.0, 4.0)
+      @endgame_status ? @font.set_color(0,1,0,1) : @font.set_color(1,0,0,1)
+      @end_batch.begin
+        text(@endgame_text, @width/2.5, @height/2.5, false, @end_batch)
+        text(@endgame_time_text, @width/2.5, @height/2.5+55, false, @end_batch)
+      @end_batch.end
+      @font.data.set_scale(1.0, 1.0)
+      @font.set_color(0,0,0, 0.9)
+    end
 
     update if @activity_active
   end
@@ -93,29 +114,54 @@ class MainGame < ApplicationAdapter
 
   def update
     handle_touch
-
-    Square.all.each do |squareA|
-      squareA.update
-      Square.all.each do |squareB|
-        if squareA.friendly != squareB.friendly
-          if squareA.x.between?(squareB.x-4, squareB.x+68)
-            if squareA.y.between?(squareB.y-4, squareB.y+68)
-              squareA.hit
-              squareB.hit
-            end
-          end
-        end
-      end
-    end
+    Square.all.each(&:update)
+    collision_detection
+    gameover?
   end
 
   def draw
-    Square.all.each(&:draw)
+    Square.all.each_slice(4) do |sub_array|
+      @shape_renderer.begin(ShapeRenderer::ShapeType::Filled)
+        sub_array.each(&:draw)
+      @shape_renderer.end
+    end
   end
 
   def draw_queue
-    @draw_queue.each(&:call)
+    @draw_queue.each_slice(8) do |sub_array|
+      @batch.begin
+        sub_array.each(&:call)
+      @batch.end
+    end
     @draw_queue.clear
+  end
+
+  def collision_detection
+    start = Time.now.to_f
+    Square.all_friendly.product(Square.all_hostile) do |squareA, squareB|
+      if (squareA.x - squareB.x).abs < 64 and (squareA.y - squareB.y).abs < 64
+        squareA.hit
+        squareB.hit
+      end
+    end
+
+    @last_collision_check_time = Time.now.to_f-start
+  end
+
+  def gameover?
+    if Square.all_hostile.size <= 0 && !@endgame_lock
+      # Won!
+      @endgame_lock = true
+      @endgame_status = true
+      @endgame_text = "You Won!"
+      @endgame_time_text = "Took #{(Time.now.to_f-@startgame_time.to_f).round(2)} seconds".freeze
+    elsif Square.all_friendly.size <= 0 && !@endgame_lock
+      # Lost :(
+      @endgame_lock = true
+      @endgame_status = false
+      @endgame_text = "You Lost!"
+      @endgame_time_text = "Took #{(Time.now.to_f-@startgame_time.to_f).round(2)} seconds".freeze
+    end
   end
 
   def handle_touch
@@ -126,12 +172,12 @@ class MainGame < ApplicationAdapter
     end
   end
 
-  def text(string = "", x = 0, y = 0, queue = false)
+  def text(string = "", x = 0, y = 0, queue = false, batch = @batch)
     if queue
-      obj = proc { @font.draw(@batch, string, x, y) }
+      obj = proc { @font.draw(batch, string, x, y) }
       @draw_queue.push(obj)
     else
-      @font.draw(@batch, string, x, y)
+      @font.draw(batch, string, x, y)
     end
   end
 
@@ -140,9 +186,9 @@ class MainGame < ApplicationAdapter
     @shape_renderer.rect(x, y, width, height)
   end
 
-  def line(x, y, x2, y2, color)
+  def line(x, y, x2, y2, color, width = 2)
     @shape_renderer.color=color
-    @shape_renderer.line(x, y, x2, y2)
+    @shape_renderer.rect_line(x, y, x2, y2, width)
   end
 
   def distance(x, y, x2, y2)

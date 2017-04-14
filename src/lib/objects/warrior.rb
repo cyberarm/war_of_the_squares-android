@@ -9,6 +9,7 @@ class Warrior < Square
     @target_tick=0
     @retarget_tick=0
     @target_distance=nil
+    @enemy_list = @friendly ? Square.all_hostile : Square.all_friendly
   end
 
   def draw
@@ -22,20 +23,15 @@ class Warrior < Square
 
   def update
     super
-    targets = []
-    if @retarget_tick > 4
-      @retarget_tick = 0
-      targets = Square.all.find_all do |square|
-        if square.friendly != self.friendly
-          if square.x.between?(self.x-64, self.x+192)
-            if square.y.between?(self.y-64, self.y+192)
-              true
-            end
-          end
-        end
+    updater
+  end
+
+  def updater
+    targets = @enemy_list.select do |square|
+      if (square.x - self.x).abs < 192 and (square.y - self.y).abs < 192
+        true
       end
     end
-    @retarget_tick+=1
 
     target = nil
     distance= 172
@@ -48,21 +44,18 @@ class Warrior < Square
     end
 
     if @target == nil
-      @target_tick=0
       @target_distance=nil
 
-      base = Square.all.detect do |square|
-        if square.friendly != self.friendly && square.is_a?(Base)
+      base = @enemy_list.detect do |square|
+        if square.is_a?(Base)
           true
         end
       end
 
       # No enemie base
       unless base
-        base = Square.all.detect do |square|
-          if square.friendly != self.friendly
-            true
-          end
+        base = @enemy_list.detect do |square|
+          true
         end
       end
 
@@ -92,10 +85,11 @@ class Warrior < Square
 
   def expiring_target
     if @target_tick > 60
-      if $window.distance(self.x, self.y, @target.x, @target.y) < @target_distance
+      if @target_distance && $window.distance(self.x, self.y, @target.x, @target.y) < @target_distance
         @target_distance = $window.distance(self.x, self.y, @target.x, @target.y)
       else
         @target = nil
+        @target_tick=0
       end
     end
   end

@@ -5,6 +5,8 @@ class Square
 
   attr_accessor :x, :y, :z, :alpha, :color, :health, :max_health, :friendly
   @@objects = []
+  @@friendly_objects = []
+  @@hostile_objects  = []
 
   def initialize(x = 0, y = 0, friendly = false)
     @x = x
@@ -17,6 +19,7 @@ class Square
     @friendly = friendly
 
     @@objects << self
+    @friendly ? @@friendly_objects << self : @@hostile_objects << self
 
     setup if defined?(self.setup)
   end
@@ -42,6 +45,8 @@ class Square
   def die?
     if @health <= 0
       @@objects.delete(self)
+      @friendly ? @@friendly_objects.delete(self) : @@hostile_objects.delete(self)
+
       $window.deaths+=1
       true
     else
@@ -64,5 +69,13 @@ class Square
 
   def self.all
     @@objects
+  end
+
+  def self.all_friendly
+    @@friendly_objects
+  end
+
+  def self.all_hostile
+    @@hostile_objects
   end
 end
